@@ -1,0 +1,5 @@
+name: WOS-150-H2
+dir: resource/dataset/WOS-150-H2/
+
+folds: [ 0,1,2,3,4]
+splits: [ "train", "val", "test" ]

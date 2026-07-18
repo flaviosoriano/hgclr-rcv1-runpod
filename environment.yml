@@ -1,0 +1,31 @@
+name: HGCLR
+channels:
+  - pytorch
+  - defaults
+  - conda-forge
+dependencies:
+  - python=3.8
+  - pip
+  - numpy
+  - tqdm
+  # PyTorch: ajuste a versão de cuda toolkit conforme sua GPU/driver.
+  # Para CPU-only, remova a linha "cudatoolkit".
+  - pytorch=1.8.1
+  - cudatoolkit=10.2
+  - pip:
+      - numpy=1.23.5
+      - transformers==4.2.1
+      - fairseq==0.10.0
+      # torch-scatter, torch-sparse e torch-geometric precisam ser
+      # instalados com wheels compiladas para a versão exata do
+      # PyTorch + CUDA usada acima. Ajuste a URL abaixo (cu102, cu111,
+      # cpu, etc.) conforme:
+      # https://pytorch-geometric.com/whl/
+      - --find-links=https://data.pyg.org/whl/torch-1.8.1+cu102.html
+      - torch-scatter==2.0.8
+      - torch-sparse==0.6.12
+      - torch-geometric==1.7.2
+      # ranx traz numba como dependência (numba>=0.54.1) e é
+      # resolvido automaticamente pelo pip.
+      - ranx
+      - hydra-core
