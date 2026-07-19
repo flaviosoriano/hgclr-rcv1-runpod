@@ -148,7 +148,8 @@ class PreprocessHelper(Helper):
 
             for split in self.params.data.splits:
                 split_samples = []
-                indices = self._load_split_ids(fold_idx, split)
+
+                indices = list(self._load_split_ids(fold_idx, split))
 
                 # The baseline usually expects the keys 'train', 'val', 'test'
                 split_key = 'val' if split == 'dev' else split

@@ -15,7 +15,7 @@ TASK_REGISTRY: Dict[str, Callable] = {
     "preprocess": lambda p: PreprocessHelper(p).run(),
     "fit": lambda p: FitHelper(p).run(),
     "predict": lambda p: PredictHelper(p).run(),
-    "eval": lambda p: EvalHelper(p).run(),
+    "eval": lambda p: EvalHelper(p).run()
 }
 
 

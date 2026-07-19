@@ -63,11 +63,12 @@ class Saver:
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--lr', type=float, default=3e-5, help='Learning rate.')
-parser.add_argument('--data', type=str, default='WebOfScience', choices=['WebOfScience', 'nyt', 'rcv1'], help='Dataset.')
+parser.add_argument('--data', type=str, default='WOS-150-H2', help='Dataset name.')
+parser.add_argument('--fold', type=int, default=0, help='Fold index for cross-validation.')
 parser.add_argument('--batch', type=int, default=12, help='Batch size.')
-parser.add_argument('--early-stop', type=int, default=6, help='Epoch before early stop.')
+parser.add_argument('--epochs', type=int, default=7, help='Number of training epochs.')
+parser.add_argument('--early-stop', type=int, default=3, help='Epoch before early stop.')
 parser.add_argument('--device', type=str, default='cuda')
-parser.add_argument('--name', type=str, required=True, help='A name for different runs.')
 parser.add_argument('--update', type=int, default=1, help='Gradient accumulate steps')
 parser.add_argument('--warmup', default=2000, type=int, help='Warmup steps.')
 parser.add_argument('--contrast', default=1, type=int, help='Whether use contrastive model.')
@@ -98,9 +99,8 @@ if __name__ == '__main__':
         import wandb
         wandb.init(config=args, project='htc')
     utils.seed_torch(args.seed)
-    args.name = args.data + '-' + args.name
     tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
-    data_path = os.path.join('data', args.data)
+    data_path = os.path.join('resource', 'dataset', args.data)
     label_dict = torch.load(os.path.join(data_path, 'bert_value_dict.pt'))
     label_dict = {i: tokenizer.decode(v, skip_special_tokens=True) for i, v in label_dict.items()}
     num_class = len(label_dict)
@@ -112,7 +112,7 @@ if __name__ == '__main__':
                                           lamb=args.lamb, threshold=args.thre, tau=args.tau)
     if args.wandb:
         wandb.watch(model)
-    split = torch.load(os.path.join(data_path, 'split.pt'))
+    split = torch.load(os.path.join(data_path, f'split_fold_{args.fold}.pt'))
     train = Subset(dataset, split['train'])
     dev = Subset(dataset, split['val'])
     if args.warmup > 0:
@@ -130,11 +130,19 @@ if __name__ == '__main__':
     best_score_macro = 0
     best_score_micro = 0
     early_stop_count = 0
-    if not os.path.exists(os.path.join('checkpoints', args.name)):
-        os.mkdir(os.path.join('checkpoints', args.name))
-    log_file = open(os.path.join('checkpoints', args.name, 'log.txt'), 'w')
 
-    for epoch in range(1000):
+    # model checkpoint
+    save_dir = os.path.join('resource', 'model_checkpoint', f"HGCLR_{args.data}")
+    os.makedirs(save_dir, exist_ok=True)
+
+    # logs
+    log_dir = os.path.join('resource', 'logs')
+    os.makedirs(log_dir, exist_ok=True)
+    log_file_path = os.path.join(log_dir, f"HGCLR_{args.data}_{args.fold}")
+    log_file = open(log_file_path, 'w')
+
+
+    for epoch in range(args.epochs):
         if early_stop_count >= args.early_stop:
             print("Early stop!")
             break
@@ -191,13 +199,7 @@ if __name__ == '__main__':
         early_stop_count += 1
         if macro_f1 > best_score_macro:
             best_score_macro = macro_f1
-            save(macro_f1, best_score_macro, os.path.join('checkpoints', args.name, 'checkpoint_best_macro.pt'))
+            save(macro_f1, best_score_macro, os.path.join(save_dir, f'HGCLR_{args.data}_{args.fold}.pt'))
             early_stop_count = 0
 
-        if micro_f1 > best_score_micro:
-            best_score_micro = micro_f1
-            save(micro_f1, best_score_micro, os.path.join('checkpoints', args.name, 'checkpoint_best_micro.pt'))
-            early_stop_count = 0
-        # save(macro_f1, best_score, os.path.join('checkpoints', args.name, 'checkpoint_{:d}.pt'.format(epoch)))
-        # save(micro_f1, best_score_micro, os.path.join('checkpoints', args.name, 'checkpoint_last.pt'))
     log_file.close()

@@ -3,3 +3,18 @@ dir: resource/dataset/WOS-150-H2/
 
 folds: [ 0,1,2,3,4]
 splits: [ "train", "val", "test" ]
+
+propensity:
+  A: 0.55
+  B: 1.5
+
+# A: float
+#         typical values:
+#         * 0.5: Wikipedia
+#         * 0.6: Amazon
+#         * 0.55: otherwise
+#     B: float
+#         typical values:
+#         * 0.4: Wikipedia
+#         * 2.6: Amazon
+#         * 1.5: otherwise
