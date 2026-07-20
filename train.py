@@ -191,8 +191,8 @@ if __name__ == '__main__':
         scores = evaluate(pred, truth, label_dict)
         macro_f1 = scores['macro_f1']
         micro_f1 = scores['micro_f1']
-        print('macro', macro_f1, 'micro', micro_f1)
-        print('macro', macro_f1, 'micro', micro_f1, file=log_file)
+        print(f"Epoch {epoch} - Mac-F1: {macro_f1}, Mic-F1: {micro_f1}")
+        print(f"Epoch {epoch} - Mac-F1: {macro_f1}, Mic-F1: {micro_f1}", file=log_file)
         if args.wandb:
             wandb.log({'val_macro': macro_f1, 'val_micro': micro_f1, 'best_macro': best_score_macro,
                        'best_micro': best_score_micro})

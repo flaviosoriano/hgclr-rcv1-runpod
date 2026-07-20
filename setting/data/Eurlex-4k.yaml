@@ -1,6 +1,0 @@
-name: Eurlex-4k
-dir: resource/dataset/Eurlex-4k/
-
-folds: [ 0,1,2,3,4]
-splits: [ "train", "val", "test" ]
-
