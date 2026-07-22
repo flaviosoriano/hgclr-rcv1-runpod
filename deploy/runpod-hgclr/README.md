@@ -23,11 +23,19 @@ The image intentionally contains **no RCV1 data and no Hugging Face token**. It 
     └── fold-4/HGCLR/
 ```
 
-Runpod documents that a network volume can be attached to multiple Pods, but warns that concurrent writes can corrupt it. This design avoids shared writes during the five fold runs.
+Runpod documents that a network volume can be attached to multiple Pods, but warns that concurrent writes can corrupt it. This design avoids overlapping writes to shared dataset artifacts during the five fold runs.
 
 ## 1. Publish the image
 
-Build from the **repository root**, from a clean, committed checkout, using an immutable tag. Do not use `latest`.
+The repository workflow `.github/workflows/publish-ghcr.yml` publishes automatically to the private GitHub Container Registry on every push to `main`. The immutable production reference is:
+
+```text
+ghcr.io/flaviosoriano/hgclr-rcv1:<FULL_COMMIT_SHA>
+```
+
+Do not use the mutable `:main` tag for a measured fold run. The workflow fails its build if the Conda environment cannot import the pinned HGCLR stack or if the public BERT cache cannot be created.
+
+For a manual build from a clean committed checkout:
 
 ```bash
 git diff --quiet && test -z "$(git status --porcelain)"
@@ -55,13 +63,15 @@ In **Runpod Console → Templates → New Template** use:
 | Field | Value |
 |---|---|
 | Name | `hgclr-rcv1-conda-ampere` |
-| Container image | `REGISTRY_NAMESPACE/hgclr-rcv1:VERSION` |
+| Container image | `ghcr.io/flaviosoriano/hgclr-rcv1:<FULL_COMMIT_SHA>` |
 | Container disk | **50 GB** minimum (the image contains Conda plus the legacy stack) |
-| HTTP port | `8888` (JupyterLab, optional) |
-| TCP port | `22` (SSH, optional) |
+| HTTP/TCP ports | None required; use the Runpod Web Terminal. Add ports only if you later add a service. |
+| Registry authentication | Select the saved private `ghcr.io` registry credential |
 | Template visibility | Private |
 
 Use an **Ampere** GPU because the project pins PyTorch `1.8.1` with CUDA `11.1`; the preflight deliberately accepts capability `8.x` only. Suitable Pod choices are A40, RTX A5000, RTX A6000, or A100. Start with 24 GB only after a pilot fold; choose 48 GB if the pilot reports CUDA OOM.
+
+Before saving the template, create a GitHub personal access token with only `read:packages` for pulling this private GHCR image. In Runpod, add a private registry authentication for `ghcr.io` with username `flaviosoriano` and that token as its password, then select that credential in the template. Do not place this registry token in an environment variable or in the repository.
 
 Create an encrypted Runpod secret named, for example, `hf_token`. Runpod references it in a template/environment field as:
 

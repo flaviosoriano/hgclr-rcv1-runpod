@@ -2,9 +2,9 @@
 # Build from the repository root:
 # docker build --platform linux/amd64 -f deploy/runpod-hgclr/Dockerfile -t REGISTRY/hgclr-rcv1:VERSION .
 #
-# The Runpod base image retains its supported Jupyter/SSH startup services.
-# HGCLR itself runs only inside the pinned Conda environment below.
-FROM runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404
+# A compact NVIDIA CUDA base keeps the GitHub Actions build below the runner's
+# disk limit. Conda supplies the project-pinned PyTorch/CUDA user-space stack.
+FROM nvidia/cuda:11.1.1-base-ubuntu20.04
 
 USER root
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -15,7 +15,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 RUN apt-get update --yes \
  && apt-get install --yes --no-install-recommends \
-      ca-certificates curl git git-lfs tini util-linux \
+      bzip2 build-essential ca-certificates curl git tini util-linux \
  && rm -rf /var/lib/apt/lists/*
 
 # Keep the bootstrap deterministic enough to detect a corrupted installer.
@@ -75,4 +75,6 @@ RUN chmod 0755 /opt/hgclr/bin/*.sh \
       > /etc/profile.d/hgclr-conda.sh
 
 WORKDIR /workspace/flaviossf
-# Preserve Runpod's base-image entrypoint/CMD so SSH and Jupyter are available.
+# Keep the Pod alive for the Runpod web terminal.  Training is explicitly
+# started with /opt/hgclr/bin/prepare_shared_rcv1.sh or run_fold.sh.
+CMD ["bash", "-lc", "sleep infinity"]
