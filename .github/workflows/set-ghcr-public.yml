@@ -1,0 +1,30 @@
+name: Make GHCR image public
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  set-public:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Set the HGCLR container package visibility to public
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.request(
+              'PATCH /user/packages/{package_type}/{package_name}',
+              {
+                package_type: 'container',
+                package_name: 'hgclr-rcv1',
+                visibility: 'public',
+                headers: {
+                  'X-GitHub-Api-Version': '2022-11-28'
+                }
+              }
+            );
+            core.info('GHCR package hgclr-rcv1 is public.');

@@ -3,6 +3,11 @@ name: Publish HGCLR Runpod image
 on:
   push:
     branches: [main]
+    # Documentation and workflow-only updates do not change the baked image.
+    # They can be dispatched manually when an image policy changes.
+    paths-ignore:
+      - '.github/workflows/**'
+      - '**/*.md'
   workflow_dispatch:
 
 permissions:
