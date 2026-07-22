@@ -24,6 +24,19 @@ jobs:
       - name: Checkout the pinned source revision
         uses: actions/checkout@v4
 
+      - name: Reclaim hosted-runner disk before the Conda image build
+        # HGCLR's legacy Conda environment is large. GitHub-hosted runners
+        # ship unused Android/.NET/Swift toolchains; deleting them before
+        # BuildKit starts prevents the Docker overlay from exhausting root FS.
+        run: |
+          set -euxo pipefail
+          df -h
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc \
+            /usr/local/.ghcup /usr/local/share/powershell /usr/share/swift
+          sudo docker system prune --all --force --volumes
+          sudo apt-get clean
+          df -h
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
