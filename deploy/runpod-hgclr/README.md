@@ -56,7 +56,7 @@ Interactive shells automatically activate `HGCLR`. The image also offers a durab
 hgclr python -c "import torch; print(torch.__version__, torch.version.cuda)"
 ```
 
-## 2. Create the private Runpod template
+## 2. Create the public Runpod template
 
 In **Runpod Console → Templates → New Template** use:
 
@@ -66,22 +66,14 @@ In **Runpod Console → Templates → New Template** use:
 | Container image | `ghcr.io/flaviosoriano/hgclr-rcv1:<FULL_COMMIT_SHA>` |
 | Container disk | **50 GB** minimum (the image contains Conda plus the legacy stack) |
 | HTTP/TCP ports | None required; use the Runpod Web Terminal. Add ports only if you later add a service. |
-| Registry authentication | Select the saved private `ghcr.io` registry credential |
-| Template visibility | Private |
+| Registry authentication | None — the GHCR image is public |
+| Template visibility | Public |
 
 Use an **Ampere** GPU because the project pins PyTorch `1.8.1` with CUDA `11.1`; the preflight deliberately accepts capability `8.x` only. Suitable Pod choices are A40, RTX A5000, RTX A6000, or A100. Start with 24 GB only after a pilot fold; choose 48 GB if the pilot reports CUDA OOM.
 
-Before saving the template, create a GitHub personal access token with only `read:packages` for pulling this private GHCR image. In Runpod, add a private registry authentication for `ghcr.io` with username `flaviosoriano` and that token as its password, then select that credential in the template. Do not place this registry token in an environment variable or in the repository.
+The GHCR package is public, while the source repository remains private. No GitHub token or registry credential is required in Runpod to pull the image. Be aware that the public image layers contain the baked HGCLR source.
 
-### Optional: make the image available to a public Runpod template
-
-GitHub Packages does not provide a REST/GraphQL mutation for changing container-package visibility. In GitHub's web UI, visit:
-
-```text
-https://github.com/users/flaviosoriano/packages/container/package/hgclr-rcv1
-```
-
-Open **Package settings → Change visibility → Public**, type the package name to confirm, and save. The GitHub repository remains private, but the image layers (and therefore the HGCLR code embedded in them) become publicly readable. Once public, create a public Runpod template with the immutable image tag and **no registry credential**:
+Use the currently verified immutable image tag:
 
 ```text
 ghcr.io/flaviosoriano/hgclr-rcv1:cb1a398da19ba46a69d4fce5ed95422fe811c0af
