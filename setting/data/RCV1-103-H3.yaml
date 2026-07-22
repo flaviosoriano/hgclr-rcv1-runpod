@@ -1,0 +1,14 @@
+name: RCV1-103-H3
+dir: resource/dataset/RCV1-103-H3/
+
+folds: [0, 1, 2, 3, 4]
+splits: ["train", "val", "test"]
+
+# RCV1 samples are multi-label sets, not ordered parent→child paths.
+# This opt-in branch preserves legacy WOS slot.pt generation unchanged.
+slot_from_taxonomy: true
+ranking_id: text_idx
+
+propensity:
+  A: 0.55
+  B: 1.5

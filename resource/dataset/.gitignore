@@ -1,0 +1,3 @@
+# Downloaded source datasets and preprocessing/training artifacts are local only.
+*
+!.gitignore

@@ -1,0 +1,11 @@
+.git
+__pycache__/
+*.py[cod]
+resource/dataset/RCV1-103-H3/
+resource/dataset/WOS-150-H2/
+resource/model_checkpoint/
+resource/ranking/
+resource/result/
+outputs/
+multirun/
+.deploy-cache/

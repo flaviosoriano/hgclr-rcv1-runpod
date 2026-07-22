@@ -11,6 +11,7 @@ from fairseq.binarizer import Binarizer
 from fairseq.data import indexed_dataset
 
 from source.helper.Helper import Helper
+from source.helper.rcv1_preparation import build_slot_hierarchy
 
 logger = logging.getLogger(__name__)
 
@@ -51,11 +52,21 @@ class PreprocessHelper(Helper):
         label_dict = {}
         label_ids = []
         hiera = defaultdict(set)
+        slot_from_taxonomy = bool(getattr(self.params.data, 'slot_from_taxonomy', False))
+        source_id_to_label = {}
 
         # 1. Tokenization and collection
         for sample in self.samples:
             source.append(self.tokenizer.encode(sample["text"].strip().lower(), truncation=True))
             labels.append(sample["labels"])
+            if slot_from_taxonomy:
+                for source_id, label in zip(sample["labels_ids"], sample["labels"]):
+                    existing = source_id_to_label.setdefault(source_id, label)
+                    if existing != label:
+                        raise ValueError(
+                            f"source label ID {source_id} has inconsistent names: "
+                            f"{existing!r} vs {label!r}"
+                        )
 
         # 2. Dynamic label dictionary
         for l in labels:
@@ -67,8 +78,20 @@ class PreprocessHelper(Helper):
         for l in labels:
             current_ids = [label_dict[label] for label in l]
             label_ids.append(current_ids)
-            for i in range(len(current_ids) - 1):
-                hiera[current_ids[i]].add(current_ids[i + 1])
+            if not slot_from_taxonomy:
+                # Legacy WOS behavior: every document has an ordered
+                # [parent, child] pair, so sample order is its taxonomy.
+                for i in range(len(current_ids) - 1):
+                    hiera[current_ids[i]].add(current_ids[i + 1])
+
+        if slot_from_taxonomy:
+            # RCV1 documents carry several sibling labels; their list order is
+            # not a path.  Use the explicit official taxonomy prepared for this
+            # dataset instead.  WOS never enters this branch.
+            official_hierarchy = build_slot_hierarchy(
+                self._load_label_taxonomy(), source_id_to_label, label_dict
+            )
+            hiera.update(official_hierarchy)
 
         # 4. Save .pt dictionaries to the root of the data directory
         value_dict = {i: self.tokenizer.encode(v.lower(), add_special_tokens=False) for v, i in label_dict.items()}

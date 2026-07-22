@@ -9,12 +9,17 @@ from tqdm import tqdm
 from train import BertDataset
 from eval import evaluate
 from model.contrast import ContrastModel
+from source.helper.rcv1_preparation import ranking_text_id
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--device', type=str, default='cuda')
 parser.add_argument('--batch', type=int, default=32, help='Batch size.')
 parser.add_argument('--data', type=str, default='WOS-150-H2', help='Dataset.')
 parser.add_argument('--fold', type=int, default=0, help='Fold index for cross-validation.')
+parser.add_argument(
+    '--ranking-id', choices=('row_idx', 'text_idx'), default=None,
+    help='Ranking key. Defaults to text_idx for RCV1-103-H3 and legacy row_idx otherwise.',
+)
 args = parser.parse_args()
 
 if __name__ == '__main__':
@@ -30,6 +35,15 @@ if __name__ == '__main__':
 
     # Point data_path to the correct resource directory
     data_path = os.path.join('resource', 'dataset', train_args.data)
+    ranking_id = args.ranking_id
+    if ranking_id is None:
+        # Preserve the WOS path exactly; RCV1 needs its external document IDs
+        # because relevance_map.pkl/text_cls.pkl are keyed by text_idx.
+        ranking_id = 'text_idx' if train_args.data == 'RCV1-103-H3' else 'row_idx'
+    row_to_text_idx = None
+    if ranking_id == 'text_idx':
+        with open(os.path.join(data_path, 'row_to_text_idx.pkl'), 'rb') as handle:
+            row_to_text_idx = pickle.load(handle)
 
     if not hasattr(train_args, 'graph'):
         train_args.graph = False
@@ -42,6 +56,10 @@ if __name__ == '__main__':
     num_class = len(label_dict)
 
     dataset = BertDataset(device=device, pad_idx=tokenizer.pad_token_id, data_path=data_path)
+    if row_to_text_idx is not None and len(row_to_text_idx) != len(dataset):
+        raise ValueError(
+            f"row_to_text_idx has {len(row_to_text_idx)} rows but dataset has {len(dataset)}"
+        )
     model = ContrastModel.from_pretrained('bert-base-uncased', num_labels=num_class,
                                           contrast_loss=train_args.contrast, graph=train_args.graph,
                                           layer=train_args.layer, data_path=data_path, multi_label=train_args.multi,
@@ -85,8 +103,11 @@ if __name__ == '__main__':
             for scores in batch_scores:
                 pred.append(scores)
 
-            # 4. Construct the ranking dictionary per document
-            for i, text_id in enumerate(batch_idx):
+            # 4. Construct the ranking dictionary per document.  WOS retains
+            # the legacy row index; RCV1 maps its dense row index to text_idx.
+            for i, row_idx in enumerate(batch_idx):
+                row_idx = int(row_idx)
+                text_id = ranking_text_id(row_idx, row_to_text_idx)
                 text_key = f"text_{text_id}"
                 ranking[text_key] = {}
                 for label_id, score in enumerate(batch_scores[i]):
