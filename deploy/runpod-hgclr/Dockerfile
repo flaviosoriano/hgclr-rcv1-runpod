@@ -18,16 +18,15 @@ RUN apt-get update --yes \
       bzip2 build-essential ca-certificates curl git tini util-linux \
  && rm -rf /var/lib/apt/lists/*
 
-# Keep the bootstrap deterministic enough to detect a corrupted installer.
-# The checksum manifest is fetched from the same official Miniconda release.
+# Pin and verify the official Miniconda installer used to create the legacy
+# Python 3.8 HGCLR environment.
 ARG MINICONDA=Miniconda3-py312_25.1.1-2-Linux-x86_64.sh
+ARG MINICONDA_SHA256=4766d85b5f7d235ce250e998ebb5a8a8210cbd4f2b0fea4d2177b3ed9ea87884
 RUN curl --fail --location --retry 3 \
       "https://repo.anaconda.com/miniconda/${MINICONDA}" -o /tmp/miniconda.sh \
- && curl --fail --location --retry 3 \
-      "https://repo.anaconda.com/miniconda/sha256sum.txt" -o /tmp/miniconda.sha256 \
- && grep " ${MINICONDA}$" /tmp/miniconda.sha256 | sha256sum --check --status - \
+ && echo "${MINICONDA_SHA256}  /tmp/miniconda.sh" | sha256sum --check --status - \
  && bash /tmp/miniconda.sh -b -p "${CONDA_DIR}" \
- && rm -f /tmp/miniconda.sh /tmp/miniconda.sha256 \
+ && rm -f /tmp/miniconda.sh \
  && conda config --system --set channel_priority flexible \
  && conda clean --all --yes
 
