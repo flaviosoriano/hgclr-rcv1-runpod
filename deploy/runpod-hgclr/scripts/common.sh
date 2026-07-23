@@ -11,7 +11,7 @@ CONDA_DIR=${CONDA_DIR:-/opt/conda}
 HGCLR_ENV_NAME=${HGCLR_ENV_NAME:-HGCLR}
 
 # Works for both the baked custom image and the standard Runpod image after
-# bootstrap_standard_runpod.sh has created Conda on the persistent volume.
+# bootstrap_standard_runpod.sh has created Conda in the current workspace.
 hgclr() {
     [[ -x "$CONDA_DIR/bin/conda" ]] || {
         echo "Missing Conda executable: $CONDA_DIR/bin/conda" >&2

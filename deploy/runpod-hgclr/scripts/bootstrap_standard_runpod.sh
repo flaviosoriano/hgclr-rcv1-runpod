@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Bootstrap HGCLR on a standard Runpod PyTorch image. Run once on the shared
-# Network Volume before staging RCV1. It clones the public deployment repo at
-# an immutable commit and creates the legacy Conda environment on the volume.
+# Bootstrap HGCLR on a standard Runpod PyTorch image. It clones the public
+# deployment repo at an immutable commit and creates the legacy Conda runtime
+# on the current Pod's /workspace (ephemeral or volume-backed).
 
 set -euo pipefail
 

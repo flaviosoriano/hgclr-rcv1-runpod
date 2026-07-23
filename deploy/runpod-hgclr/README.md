@@ -1,160 +1,153 @@
-# Runpod standard-image bootstrap: HGCLR / RCV1-103-H3
+# HGCLR / RCV1-103-H3 on Runpod: one ephemeral A40 Pod per fold
 
-This is the recommended deployment path for RCV1. It deliberately uses a
-standard, cached Runpod PyTorch image for fast Pod creation, then bootstraps
-the pinned legacy HGCLR Conda environment into the persistent Network Volume.
-
-The former custom GHCR image is about 6.84 GiB compressed (with one 6.12 GiB
-layer). It remains available as a fallback, but it can spend many minutes in
-registry pull/unpack before the Pod starts. The standard-image path moves the
-slow work into a logged, idempotent bootstrap after the container is running.
-
-The public repository is used only to fetch the exact source revision. RCV1
-and Hugging Face credentials are never committed. A public repository means
-all code is visible; this is equivalent to the previous public image exposing
-its baked source layers.
-
-## Execution layout
+This deployment intentionally uses **no Network Volume**, no template, and no
+custom image. Create five ordinary A40 Pods directly in Runpod. Each Pod
+downloads and preprocesses its own RCV1 copy, then runs exactly one fold.
 
 ```text
-/workspace/flaviossf/
-├── hgclr-source/              # pinned public Git checkout
-├── miniconda3/                # legacy Conda installation and HGCLR env
-├── hgclr-runtime.env          # source/Conda/revision manifest
-├── hgclr-shared/
-│   ├── RCV1-103-H3/           # download + preprocess, immutable after staging
-│   └── .cache/huggingface/
-└── hgclr-runs/
-    ├── fold-0/HGCLR/          # isolated code + outputs
-    ├── fold-1/HGCLR/
-    └── fold-4/HGCLR/
+Pod FOLD=0: bootstrap → download RCV1 → preprocess → fit → predict → eval
+Pod FOLD=1: bootstrap → download RCV1 → preprocess → fit → predict → eval
+Pod FOLD=2: bootstrap → download RCV1 → preprocess → fit → predict → eval
+Pod FOLD=3: bootstrap → download RCV1 → preprocess → fit → predict → eval
+Pod FOLD=4: bootstrap → download RCV1 → preprocess → fit → predict → eval
 ```
 
-`prepare_shared_rcv1.sh` writes `tok.bin`, `slot.pt`, `Y.bin`, and split
-artifacts. Run it exactly once. Five fold Pods only read this prepared data
-and write into their own `hgclr-runs/fold-N` paths.
+This maximizes fold-level parallelism at the cost of five independent dataset
+downloads, Conda installations, and preprocessing runs. It removes shared
+volume setup and shared-write coordination entirely.
 
-## 1. Create the standard public Runpod template
+## Important properties
 
-In **Runpod Console → Templates → New Template** use:
+- Use the standard Runpod image, not the legacy GHCR image.
+- The A40 is supported: it is Ampere (`sm_86`), compatible with HGCLR's
+  PyTorch 1.8.1 / CUDA 11.1 runtime.
+- Each Pod needs `HF_TOKEN` only to download its own RCV1 copy.
+- A Pod's data, environment, checkpoints, rankings, logs, and results are on
+  its ephemeral container disk. Export each fold's results before stopping or
+  removing that Pod.
+- No Pod reads data from another Pod. `READY` is local to each Pod and only
+  guards that Pod's own preprocessing → fold sequence.
+
+## 1. Create one Pod directly for one fold
+
+In **Runpod Console → Deploy**, create an ordinary Pod with:
 
 | Field | Value |
 |---|---|
-| Name | `hgclr-rcv1-standard-bootstrap` |
+| GPU | A40 |
 | Container image | `runpod/pytorch:2.1.0-py3.10-cuda11.8.0-devel-ubuntu22.04` |
-| Container disk | 20 GB minimum |
-| Network volume | 150 GB minimum, mounted at `/workspace` |
-| Registry authentication | None |
-| Template visibility | Public |
-| HTTP/TCP ports | None required; use the Runpod Web Terminal |
+| Container disk | 100 GB recommended |
+| Network Volume | **None** |
+| Container Start Command | `bash -lc 'exec sleep infinity'` |
+| Template | **None** |
 
-Use an Ampere GPU: A40, RTX A5000, RTX A6000, or A100. The pinned HGCLR stack
-uses PyTorch 1.8.1 with CUDA 11.1 and validates compute capability `8.x`.
-
-Set the template environment variable `HGCLR_REVISION` to a full immutable
-40-character commit SHA from this public repository. Do not use `main` for a
-measured run.
-
-Set the **Container Start Command** below, replacing `<COMMIT_SHA>` with that
-same value. It creates/reuses the Conda environment on the mounted volume,
-locks concurrent setup, validates imports, then keeps the Pod alive.
-
-```bash
-bash -lc 'set -euo pipefail; export HGCLR_REVISION=<COMMIT_SHA>; curl --fail --location --retry 3 --silent --show-error "https://raw.githubusercontent.com/flaviosoriano/hgclr-rcv1-runpod/${HGCLR_REVISION}/deploy/runpod-hgclr/scripts/bootstrap_standard_runpod.sh" --output /tmp/hgclr-bootstrap.sh; bash /tmp/hgclr-bootstrap.sh; sleep infinity'
-```
-
-The first Pod performs Conda installation and environment creation. This can
-take time, but it happens after the standard base container starts and leaves
-visible logs. Later Pods reuse `/workspace/flaviossf/miniconda3` and the pinned
-source checkout, so bootstrap is fast.
-
-## 2. Stage shared RCV1 data once
-
-Create one temporary staging Pod from the template. Attach the shared volume
-in the same datacenter as all fold Pods. Give **only this Pod** the secret:
-
-```text
-HF_TOKEN={{ RUNPOD_SECRET_hf_token }}
-```
-
-After its bootstrap command has completed, use the Web Terminal:
-
-```bash
-bash /workspace/flaviossf/hgclr-source/deploy/runpod-hgclr/scripts/prepare_standard_rcv1.sh
-```
-
-Wait for success and inspect:
-
-```bash
-cat /workspace/flaviossf/hgclr-shared/RCV1-103-H3/READY
-```
-
-It must contain the same immutable revision:
-
-```text
-dataset=RCV1-103-H3
-image_revision=<COMMIT_SHA>
-```
-
-Stop the staging Pod when `READY` exists. Never run staging in parallel.
-
-## 3. Pilot fold 0
-
-Create one new Pod from the same template and attach the same volume. Do not
-set `HF_TOKEN`. Set only:
+Set this Pod's environment variables in the deployment form:
 
 ```text
 FOLD=0
+HF_TOKEN={{ RUNPOD_SECRET_hf_token }}
 ```
 
-After bootstrap has completed, run:
+Use a different `FOLD` value for each Pod: `0`, `1`, `2`, `3`, or `4`.
+Do not place the token in a command, script, log, or Git file. Configure it
+through the Runpod secret/environment-variable UI for every Pod.
+
+Wait for the Pod to be `Running`, then connect through SSH or the Web Terminal.
+Confirm the A40 is visible:
 
 ```bash
 nvidia-smi
-bash /workspace/flaviossf/hgclr-source/deploy/runpod-hgclr/scripts/run_standard_fold.sh
 ```
 
-The runner performs `fit,predict,eval`. It must read `READY`, reject a source
-revision mismatch, and write only under:
+## 2. Bootstrap the pinned runtime in that Pod
+
+Choose a full immutable 40-character Git commit SHA, then use the same SHA in
+all five Pods. From the Pod terminal:
+
+```bash
+export HGCLR_REVISION=<COMMIT_SHA>
+export WORKSPACE_ROOT=/workspace/flaviossf
+
+curl --fail --location --retry 3 --silent --show-error \
+  "https://raw.githubusercontent.com/flaviosoriano/hgclr-rcv1-runpod/${HGCLR_REVISION}/deploy/runpod-hgclr/scripts/bootstrap_standard_runpod.sh" \
+  --output /tmp/hgclr-bootstrap.sh
+
+bash /tmp/hgclr-bootstrap.sh
+```
+
+The bootstrap creates this Pod-local layout:
 
 ```text
-/workspace/flaviossf/hgclr-runs/fold-0/HGCLR/resource/
+/workspace/flaviossf/
+├── hgclr-source/                 # exact detached Git checkout
+├── miniconda3/                   # legacy HGCLR Conda environment
+├── hgclr-runtime.env             # revision/runtime manifest
+├── hgclr-shared/RCV1-103-H3/     # this Pod's own download + preprocessing
+└── hgclr-runs/fold-N/HGCLR/      # this Pod's own outputs
 ```
 
-Before launching all folds, retain the pilot terminal log and confirm a
-ranking uses keys of the form `text_<text_idx>`.
+## 3. Run this Pod's local staging and fold
 
-## 4. Launch the remaining folds
+After bootstrap succeeds, run:
 
-After fold 0 passes, create Pods for `FOLD=1`, `FOLD=2`, `FOLD=3`, and
-`FOLD=4`, all using the identical template, `HGCLR_REVISION`, and mounted
-Network Volume. No fold Pod receives the Hugging Face secret.
+```bash
+bash /workspace/flaviossf/hgclr-source/deploy/runpod-hgclr/scripts/run_ephemeral_fold.sh
+```
 
-Run the same `run_standard_fold.sh` command in each Pod. Each fold writes only
-to its own `hgclr-runs/fold-N` directory.
+The runner validates `FOLD=0..4`, requires `HF_TOKEN`, then does all of the
+following in the current Pod only:
 
-## Operational safeguards
+1. Downloads `LBD-UFMG/RCV1-103-H3` into its local container disk.
+2. Builds the official RCV1 taxonomy metadata and `row_to_text_idx` mapping.
+3. Preprocesses its local dataset and writes the local `READY` marker.
+4. Removes `HF_TOKEN` from the training subprocess environment.
+5. Runs `fit,predict,eval` only for the selected fold.
 
-- The bootstrap requires a 40-character commit SHA and checks the checked-out
-  Git revision before generating `hgclr-runtime.env`.
-- Bootstrap holds a volume-wide `flock`; simultaneous Pods do not create or
-  overwrite the Conda environment concurrently.
-- `READY` binds staging data to `IMAGE_HGCLR_REVISION`; fold runs reject data
-  prepared from a different source revision.
-- WOS files/configuration are untouched. This path applies only to RCV1.
-- The HF token is used only by staging; it must never be saved in the volume,
-  source checkout, template, logs, or fold Pods.
-
-## Legacy custom image fallback
-
-The previously published custom image remains available for controlled
-comparison:
+A successful fold prints a path like:
 
 ```text
-ghcr.io/flaviosoriano/hgclr-rcv1:cb1a398da19ba46a69d4fce5ed95422fe811c0af
+Fold 0 completed. Results remain under /workspace/flaviossf/hgclr-runs/fold-0/HGCLR/resource/.
 ```
 
-Do not use it for the first retry while diagnosing long initialization. If the
-standard base also remains in `Initializing`, inspect the Runpod Pod events
-and pull logs: that points to scheduler, GPU availability, region, disk, or
-volume attachment rather than the HGCLR image layers.
+Do not run a second fold in the same Pod. The one-Pod-per-fold constraint keeps
+outputs and failure recovery independent.
+
+## 4. Launch folds in parallel
+
+Repeat sections 1–3 for five Pods with:
+
+```text
+FOLD=0
+FOLD=1
+FOLD=2
+FOLD=3
+FOLD=4
+```
+
+They may run concurrently because they do not share a filesystem, lock, cache,
+preprocessed dataset, or output directory. Each needs its own `HF_TOKEN` in
+its Pod deployment configuration.
+
+## 5. Export results before ending a Pod
+
+Before stopping/removing each Pod, inspect and export the execution-unique
+artifacts from:
+
+```text
+/workspace/flaviossf/hgclr-runs/fold-N/HGCLR/resource/
+/workspace/flaviossf/hgclr-runs/fold-N/HGCLR/resource/time/
+```
+
+Typical artifacts to preserve are checkpoints, predictions, rankings, result
+reports, logs, timing files, and the immutable revision/configuration used for
+the run. Do not rely on the container disk surviving Pod removal.
+
+## Safeguards
+
+- The bootstrap accepts only a 40-character lowercase Git SHA and checks the
+  detached checkout before writing `hgclr-runtime.env`.
+- The RCV1 taxonomy comes from the versioned official code hierarchy, not label
+  order or label cooccurrence in documents.
+- RCV1 rankings use `text_<text_idx>`; legacy WOS behavior is unchanged.
+- The folder named `hgclr-shared` is only local naming inside one Pod in this
+  mode. It is not a Runpod Network Volume and is never shared with another Pod.
