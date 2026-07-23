@@ -51,7 +51,9 @@ git -C "$IMAGE_SOURCE" checkout --detach --force FETCH_HEAD
 printf '%s\n' "$HGCLR_REVISION" > "$IMAGE_SOURCE/IMAGE_HGCLR_REVISION"
 
 if [[ ! -x "$CONDA_DIR/bin/conda" ]]; then
-    installer=$(mktemp)
+    # The official installer refuses paths without a .sh suffix, even when
+    # invoked with bash. Keep the suffix while still using a safe temp file.
+    installer=$(mktemp --suffix=.sh /tmp/hgclr-miniconda-XXXXXX)
     trap 'rm -f "$installer"' EXIT
     curl --fail --location --retry 3 \
         "https://repo.anaconda.com/miniconda/${MINICONDA}" --output "$installer"
