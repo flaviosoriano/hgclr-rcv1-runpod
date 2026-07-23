@@ -7,6 +7,18 @@ WORKSPACE_ROOT=${WORKSPACE_ROOT:-/workspace/flaviossf}
 SHARED_ROOT=${SHARED_ROOT:-${WORKSPACE_ROOT}/hgclr-shared}
 IMAGE_HGCLR_REVISION=${IMAGE_HGCLR_REVISION:?Image is missing its baked HGCLR revision.}
 IMAGE_SOURCE=${IMAGE_SOURCE:-/opt/hgclr/source}
+CONDA_DIR=${CONDA_DIR:-/opt/conda}
+HGCLR_ENV_NAME=${HGCLR_ENV_NAME:-HGCLR}
+
+# Works for both the baked custom image and the standard Runpod image after
+# bootstrap_standard_runpod.sh has created Conda on the persistent volume.
+hgclr() {
+    [[ -x "$CONDA_DIR/bin/conda" ]] || {
+        echo "Missing Conda executable: $CONDA_DIR/bin/conda" >&2
+        return 1
+    }
+    "$CONDA_DIR/bin/conda" run --no-capture-output --name "$HGCLR_ENV_NAME" "$@"
+}
 
 require_hgclr_environment() {
     hgclr python - <<'PY'
