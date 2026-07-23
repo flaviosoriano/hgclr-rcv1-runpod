@@ -1,13 +1,8 @@
 name: Publish HGCLR Runpod image
 
 on:
-  push:
-    branches: [main]
-    # Documentation and workflow-only updates do not change the baked image.
-    # They can be dispatched manually when an image policy changes.
-    paths-ignore:
-      - '.github/workflows/**'
-      - '**/*.md'
+  # The standard Runpod-image bootstrap is the operational deployment path.
+  # Build the large legacy Conda image only on an explicit fallback request.
   workflow_dispatch:
 
 permissions:
