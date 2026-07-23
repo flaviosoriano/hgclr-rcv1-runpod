@@ -36,6 +36,23 @@ PY
 cd "$STAGING_REPO"
 hgclr python source/helper/rcv1_preparation.py --data-dir "$DATA_DIR"
 
+# The staging worktree needs the shared directory before preprocess.  Unlike
+# fold worktrees, READY does not exist yet, so link_shared_data() deliberately
+# cannot be used here.
+staging_link="$STAGING_REPO/resource/dataset/RCV1-103-H3"
+mkdir -p "$(dirname "$staging_link")"
+if [[ -L "$staging_link" ]]; then
+    [[ "$(readlink -f "$staging_link")" == "$(readlink -f "$DATA_DIR")" ]] || {
+        echo "Existing staging data symlink points elsewhere: $staging_link" >&2
+        exit 1
+    }
+elif [[ -e "$staging_link" ]]; then
+    echo "Refusing to replace non-symlink staging data path: $staging_link" >&2
+    exit 1
+else
+    ln -s "$DATA_DIR" "$staging_link"
+fi
+
 # This creates global preprocessing files and all fold split artifacts exactly
 # once.  Do not run preprocessing simultaneously from the five fold Pods.
 hgclr bash run/RCV1-103-H3.sh 0 4 preprocess
