@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Run exactly one RCV1 fold in one disposable standard-image Pod.
-# No Network Volume is used: this Pod downloads and preprocesses its own copy
-# before fitting the selected fold. All files disappear with the Pod unless
-# exported separately.
+# Run exactly one RCV1 fold in one Pod-local standard-image workspace.
+# No shared Network Volume is used: every Pod downloads and preprocesses its
+# own copy before fitting its selected fold. The Pod-local disk may be retained
+# independently by Runpod, but no other Pod can read it.
 set -euo pipefail
 
 FOLD=${FOLD:?Set FOLD to one of 0,1,2,3,4.}
