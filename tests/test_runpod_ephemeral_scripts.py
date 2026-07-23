@@ -69,6 +69,25 @@ class EphemeralFoldScriptTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(trace.read_text().splitlines(), ["prepare:3", "run:3"])
 
+    def test_resumes_ready_local_staging_without_hf_token(self) -> None:
+        temporary, trace, env = self._make_fixture()
+        with temporary:
+            data_dir = Path(env["WORKSPACE_ROOT"]) / "hgclr-shared" / "RCV1-103-H3"
+            data_dir.mkdir(parents=True)
+            (data_dir / "READY").write_text(
+                "dataset=RCV1-103-H3\nimage_revision=fixture\nprepared_utc=fixture\n"
+            )
+            result = subprocess.run(
+                ["bash", str(SCRIPT)],
+                env=env | {"FOLD": "2"},
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(trace.read_text().splitlines(), ["run:2"])
+            self.assertIn("reusing local RCV1", result.stdout)
+
     def test_requires_hf_token_before_starting_local_staging(self) -> None:
         temporary, trace, env = self._make_fixture()
         with temporary:
